@@ -50,134 +50,100 @@ const MZ_QUERIES = {
 const RAW_QUERIES = {
   insurance_recon: `
     SELECT
-      c.claim_id,
+      c.org_id,
+      c.id AS claim_id,
       c.patient_id,
-      c.status AS claim_status,
-      c.submitted_at,
-      c.payer_id,
-      SUM(cli.billed_amount)   AS total_billed,
-      SUM(cli.allowed_amount)  AS total_allowed,
-      SUM(cli.paid_amount)     AS total_paid,
-      pa.auth_number,
-      pa.approved_units,
-      pa.status AS auth_status
-    FROM claims c
-    JOIN claim_line_items cli ON cli.claim_id = c.claim_id
-    LEFT JOIN prior_authorizations pa
-           ON pa.patient_id = c.patient_id
-          AND pa.payer_id   = c.payer_id
-          AND pa.status = 'approved'
-    WHERE c.submitted_at >= NOW() - INTERVAL '90 days'
-    GROUP BY
-      c.claim_id,
-      c.patient_id,
+      c.payer,
+      c.billed_amount,
+      c.paid_amount,
+      c.billed_amount - COALESCE(c.paid_amount, 0) AS balance,
       c.status,
-      c.submitted_at,
-      c.payer_id,
-      pa.auth_number,
-      pa.approved_units,
-      pa.status
+      COUNT(cli.id) AS line_item_count,
+      SUM(cli.billed) AS total_billed,
+      SUM(cli.paid) AS total_paid,
+      pa.status AS auth_status,
+      pa.auth_code
+    FROM claims c
+    JOIN claim_line_items cli ON cli.claim_id = c.id
+    LEFT JOIN prior_authorizations pa ON pa.patient_id = c.patient_id
+      AND pa.status = 'approved'
+    WHERE c.status IN ('pending', 'partial')
+    GROUP BY c.org_id, c.id, c.patient_id, c.payer,
+             c.billed_amount, c.paid_amount, c.status,
+             pa.status, pa.auth_code
     LIMIT 100
   `.trim(),
 
   patient_360: `
     SELECT
-      p.patient_id,
-      p.first_name,
-      p.last_name,
-      p.date_of_birth,
-      p.insurance_id,
-      COUNT(DISTINCT c.claim_id)   AS total_claims,
-      SUM(c.total_amount)          AS lifetime_spend,
-      MAX(c.submitted_at)          AS last_claim_date,
-      COUNT(DISTINCT pa.auth_id)   AS total_auths,
-      COUNT(DISTINCT dr.dispense_id) AS total_dispenses
+      p.id AS patient_id,
+      p.org_id,
+      p.mrn,
+      COUNT(DISTINCT c.id) AS total_claims,
+      SUM(c.billed_amount) AS total_billed,
+      COUNT(DISTINCT pa.id) AS total_auths,
+      COUNT(DISTINCT dr.id) AS total_dispenses,
+      MAX(c.updated_at) AS last_claim_activity,
+      MAX(pa.updated_at) AS last_auth_activity
     FROM patients p
-    LEFT JOIN claims c ON c.patient_id = p.patient_id
-    LEFT JOIN prior_authorizations pa ON pa.patient_id = p.patient_id
-    LEFT JOIN dispensing_records dr ON dr.patient_id = p.patient_id
-    GROUP BY
-      p.patient_id,
-      p.first_name,
-      p.last_name,
-      p.date_of_birth,
-      p.insurance_id
+    LEFT JOIN claims c ON c.patient_id = p.id
+    LEFT JOIN prior_authorizations pa ON pa.patient_id = p.id
+    LEFT JOIN dispensing_records dr ON dr.patient_id = p.id
+    GROUP BY p.id, p.org_id, p.mrn, p.attributes
     LIMIT 100
   `.trim(),
 
   dispense_exceptions: `
     SELECT
-      dr.dispense_id,
+      dr.id AS dispense_id,
       dr.patient_id,
-      dr.drug_code,
-      dr.dispensed_qty,
+      dr.org_id,
+      dr.medication_code,
       dr.dispensed_at,
-      pa.approved_units,
-      pa.auth_number,
-      pa.expiration_date,
-      (dr.dispensed_qty - pa.approved_units) AS qty_variance,
-      CASE
-        WHEN dr.dispensed_qty > pa.approved_units THEN 'over_dispensed'
-        WHEN pa.auth_id IS NULL                   THEN 'no_auth'
-        WHEN pa.expiration_date < dr.dispensed_at THEN 'auth_expired'
-        ELSE 'ok'
-      END AS exception_type
+      dr.status,
+      pa.status AS auth_status,
+      pa.auth_code
     FROM dispensing_records dr
     LEFT JOIN prior_authorizations pa
-           ON pa.patient_id = dr.patient_id
-          AND pa.drug_code  = dr.drug_code
-          AND pa.status     = 'approved'
-    WHERE dr.dispensed_at >= NOW() - INTERVAL '30 days'
+      ON pa.patient_id = dr.patient_id
+      AND pa.medication_code = dr.medication_code
+    WHERE dr.status = 'held'
+       OR pa.status IS NULL
+       OR pa.status = 'denied'
     LIMIT 100
   `.trim(),
 
   workflow_summary: `
     SELECT
-      w.workflow_id,
-      w.workflow_type,
-      w.assignee_id,
-      w.created_at,
-      w.priority,
-      COUNT(we.event_id)                              AS total_events,
-      MIN(we.occurred_at)                             AS first_event,
-      MAX(we.occurred_at)                             AS last_event,
-      SUM(CASE WHEN we.event_type = 'error' THEN 1 ELSE 0 END) AS error_count,
-      EXTRACT(EPOCH FROM (MAX(we.occurred_at) - MIN(we.occurred_at))) AS duration_sec
+      w.org_id,
+      w.id AS workflow_id,
+      w.name,
+      w.status,
+      COUNT(we.id) AS total_events,
+      COUNT(we.id) FILTER (WHERE we.created_at > NOW() - INTERVAL '1 hour') AS events_last_hour,
+      MAX(we.created_at) AS last_event_at
     FROM workflows w
-    LEFT JOIN workflow_events we ON we.workflow_id = w.workflow_id
-    WHERE w.created_at >= NOW() - INTERVAL '7 days'
-    GROUP BY
-      w.workflow_id,
-      w.workflow_type,
-      w.assignee_id,
-      w.created_at,
-      w.priority
+    LEFT JOIN workflow_events we ON we.workflow_id = w.id
+    GROUP BY w.org_id, w.id, w.name, w.status
     LIMIT 100
   `.trim(),
 
   claims_pending: `
     SELECT
-      c.claim_id,
+      c.id,
+      c.org_id,
       c.patient_id,
-      c.payer_id,
+      c.payer,
       c.status,
-      c.submitted_at,
-      c.total_amount,
-      COUNT(cli.line_id)           AS line_count,
-      SUM(cli.billed_amount)       AS total_billed,
-      SUM(cli.denied_amount)       AS total_denied,
-      MIN(cli.service_date)        AS earliest_service,
-      MAX(cli.service_date)        AS latest_service
+      c.billed_amount,
+      c.paid_amount,
+      c.service_date,
+      COUNT(cli.id) AS line_items
     FROM claims c
-    JOIN claim_line_items cli ON cli.claim_id = c.claim_id
-    WHERE c.status IN ('pending', 'submitted', 'in_review')
-    GROUP BY
-      c.claim_id,
-      c.patient_id,
-      c.payer_id,
-      c.status,
-      c.submitted_at,
-      c.total_amount
+    JOIN claim_line_items cli ON cli.claim_id = c.id
+    WHERE c.status IN ('submitted', 'pending', 'partial')
+    GROUP BY c.id, c.org_id, c.patient_id, c.payer,
+             c.status, c.billed_amount, c.paid_amount, c.service_date
     LIMIT 100
   `.trim(),
 };
@@ -256,42 +222,23 @@ app.get('/query/materialize', async (req, res) => {
 app.post('/spike', async (req, res) => {
   const sql = `
     CREATE TEMP TABLE _spike_reconciliation AS
-    SELECT
-      c.claim_id,
-      c.patient_id,
-      c.payer_id,
-      c.status,
-      c.submitted_at,
-      SUM(cli.billed_amount)  AS total_billed,
-      SUM(cli.paid_amount)    AS total_paid,
-      COUNT(cli.line_id)      AS line_count,
-      pa.auth_number,
-      pa.approved_units,
-      pa.status               AS auth_status,
-      dr.dispensed_qty,
-      dr.drug_code
+    SELECT c.id, c.org_id, c.patient_id, c.payer,
+           c.billed_amount, c.paid_amount,
+           c.billed_amount - COALESCE(c.paid_amount, 0) AS balance,
+           c.status,
+           COUNT(cli.id) AS line_item_count,
+           SUM(cli.billed) AS total_billed,
+           SUM(cli.paid) AS total_paid,
+           pa.status AS auth_status,
+           pa.auth_code
     FROM claims c
-    JOIN claim_line_items cli
-      ON cli.claim_id = c.claim_id
-    LEFT JOIN prior_authorizations pa
-      ON pa.patient_id = c.patient_id
-     AND pa.payer_id   = c.payer_id
-     AND pa.status     = 'approved'
-    LEFT JOIN dispensing_records dr
-      ON dr.patient_id = c.patient_id
-     AND dr.drug_code  = pa.drug_code
-    WHERE c.submitted_at >= NOW() - INTERVAL '180 days'
-    GROUP BY
-      c.claim_id,
-      c.patient_id,
-      c.payer_id,
-      c.status,
-      c.submitted_at,
-      pa.auth_number,
-      pa.approved_units,
-      pa.status,
-      dr.dispensed_qty,
-      dr.drug_code;
+    JOIN claim_line_items cli ON cli.claim_id = c.id
+    LEFT JOIN prior_authorizations pa ON pa.patient_id = c.patient_id AND pa.status = 'approved'
+    WHERE c.status IN ('pending', 'partial')
+      AND c.service_date > NOW() - INTERVAL '180 days'
+    GROUP BY c.org_id, c.id, c.patient_id, c.payer,
+             c.billed_amount, c.paid_amount, c.status,
+             pa.status, pa.auth_code;
 
     SELECT COUNT(*) FROM _spike_reconciliation;
     DROP TABLE IF EXISTS _spike_reconciliation;
@@ -318,21 +265,16 @@ app.post('/spike', async (req, res) => {
 
 // GET /metrics — Aurora pg_stat diagnostics
 app.get('/metrics', async (req, res) => {
-  const bgwriterSql = `
+  const dbStatSql = `
     SELECT
       blks_hit,
       blks_read,
+      temp_files,
+      temp_bytes,
       CASE WHEN (blks_hit + blks_read) > 0
            THEN ROUND(100.0 * blks_hit / (blks_hit + blks_read), 2)
            ELSE 0
       END AS buffer_hit_rate
-    FROM pg_stat_bgwriter
-  `;
-
-  const dbStatSql = `
-    SELECT
-      temp_files,
-      temp_bytes
     FROM pg_stat_database
     WHERE datname = current_database()
   `;
@@ -344,22 +286,20 @@ app.get('/metrics', async (req, res) => {
   `;
 
   try {
-    const [bgResult, dbResult, actResult] = await Promise.all([
-      pgPool.query(bgwriterSql),
+    const [dbResult, actResult] = await Promise.all([
       pgPool.query(dbStatSql),
       pgPool.query(activitySql),
     ]);
 
-    const bg = bgResult.rows[0] || {};
     const db = dbResult.rows[0] || {};
     const act = actResult.rows[0] || {};
 
     return res.json({
-      buffer_hit_rate: parseFloat(bg.buffer_hit_rate) || 0,
+      buffer_hit_rate: parseFloat(db.buffer_hit_rate) || 0,
       active_connections: parseInt(act.active_connections, 10) || 0,
       temp_files: parseInt(db.temp_files, 10) || 0,
       temp_bytes: parseInt(db.temp_bytes, 10) || 0,
-      cache_hit_pct: parseFloat(bg.buffer_hit_rate) || 0,
+      cache_hit_pct: parseFloat(db.buffer_hit_rate) || 0,
     });
   } catch (err) {
     console.error('[metrics] error:', err.message);
