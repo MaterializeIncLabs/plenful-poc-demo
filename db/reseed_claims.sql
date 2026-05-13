@@ -110,6 +110,48 @@ WHERE random() < 0.50;
 COMMIT;
 
 -- ============================================================
+-- PRIOR AUTHORIZATIONS  (200,000)
+-- ============================================================
+BEGIN;
+
+INSERT INTO prior_authorizations (
+  id, patient_id, org_id,
+  medication_code, status, auth_code,
+  submitted_at, resolved_at, payer,
+  created_at, updated_at
+)
+SELECT
+  gen_random_uuid(),
+  p.id,
+  p.org_id,
+  (ARRAY['J0178','J0179','J0181','J0185','J0256','J0270','J0360','J0585','J0592','J1020',
+         'J1030','J1040','J1050','J1060','J1070','J1080','J1090','J1094','J1096','J1100'])
+    [ 1 + (s.i % 20) ],
+  CASE
+    WHEN s.i % 100 < 50 THEN 'approved'
+    WHEN s.i % 100 < 70 THEN 'pending'
+    WHEN s.i % 100 < 85 THEN 'denied'
+    ELSE                      'expired'
+  END,
+  CASE WHEN s.i % 100 < 50
+       THEN 'AUTH-' || LPAD(s.i::TEXT, 8, '0')
+       ELSE NULL
+  END,
+  NOW() - (random() * 365)::INT * INTERVAL '1 day',
+  CASE WHEN s.i % 100 < 80
+       THEN NOW() - (random() * 300)::INT * INTERVAL '1 day'
+       ELSE NULL
+  END,
+  (ARRAY['BlueStar Insurance','Apex Health Coverage','National Care Plans','Horizon Benefits Group','Medicare','Medicaid'])
+    [ 1 + (s.i % 6) ],
+  NOW() - (random() * 365)::INT * INTERVAL '1 day',
+  NOW() - (random() * 30)::INT  * INTERVAL '1 day'
+FROM generate_series(0, 199999) AS s(i)
+JOIN pt p ON p.rn = (s.i % 100000);
+
+COMMIT;
+
+-- ============================================================
 -- DISPENSING RECORDS  (150,000) — requires prior_authorizations
 -- ============================================================
 
