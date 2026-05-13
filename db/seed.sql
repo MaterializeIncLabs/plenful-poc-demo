@@ -67,6 +67,12 @@ FROM generate_series(1, 100000) AS s(i);
 
 COMMIT;
 
+-- Temp table for efficient patient lookups by row number (0-based)
+CREATE TEMP TABLE pt AS
+SELECT id, org_id, row_number() OVER (ORDER BY id) - 1 AS rn
+FROM patients;
+CREATE INDEX ON pt(rn);
+
 -- ============================================================
 -- CLAIMS  (500,000)
 -- Status distribution: ~60% paid, ~20% pending, ~10% partial,
@@ -103,13 +109,8 @@ SELECT
   CASE WHEN s.i % 100 >= 98 THEN TRUE ELSE FALSE END  AS reconciled,
   NOW() - (random() * 540)::INT * INTERVAL '1 day',
   NOW() - (random() * 30)::INT  * INTERVAL '1 day'
-FROM generate_series(1, 500000) AS s(i)
-JOIN LATERAL (
-  SELECT id, org_id
-  FROM patients
-  OFFSET (s.i % 100000)
-  LIMIT 1
-) p ON TRUE;
+FROM generate_series(0, 499999) AS s(i)
+JOIN pt p ON p.rn = (s.i % 100000);
 
 COMMIT;
 
@@ -212,15 +213,16 @@ SELECT
     [ 1 + (s.i % 6) ],
   NOW() - (random() * 365)::INT * INTERVAL '1 day',
   NOW() - (random() * 30)::INT  * INTERVAL '1 day'
-FROM generate_series(1, 200000) AS s(i)
-JOIN LATERAL (
-  SELECT id, org_id
-  FROM patients
-  OFFSET (s.i % 100000)
-  LIMIT 1
-) p ON TRUE;
+FROM generate_series(0, 199999) AS s(i)
+JOIN pt p ON p.rn = (s.i % 100000);
 
 COMMIT;
+
+-- Temp table for efficient prior_authorization lookups by row number (0-based)
+CREATE TEMP TABLE pa_ids AS
+SELECT id, medication_code, row_number() OVER (ORDER BY id) - 1 AS rn
+FROM prior_authorizations;
+CREATE INDEX ON pa_ids(rn);
 
 -- ============================================================
 -- DISPENSING RECORDS  (150,000)
@@ -251,19 +253,9 @@ SELECT
     ELSE                      'returned'
   END,
   NOW() - (random() * 365)::INT * INTERVAL '1 day'
-FROM generate_series(1, 150000) AS s(i)
-JOIN LATERAL (
-  SELECT id, org_id
-  FROM patients
-  OFFSET (s.i % 100000)
-  LIMIT 1
-) p ON TRUE
-JOIN LATERAL (
-  SELECT id, medication_code
-  FROM prior_authorizations
-  OFFSET (s.i % 200000)
-  LIMIT 1
-) pa ON TRUE;
+FROM generate_series(0, 149999) AS s(i)
+JOIN pt p ON p.rn = (s.i % 100000)
+JOIN pa_ids pa ON pa.rn = (s.i % 200000);
 
 COMMIT;
 
@@ -322,6 +314,12 @@ FROM generate_series(1, 10) AS s(i);
 
 COMMIT;
 
+-- Temp table for efficient workflow lookups by row number (0-based)
+CREATE TEMP TABLE wf_ids AS
+SELECT id, row_number() OVER (ORDER BY id) - 1 AS rn
+FROM workflows;
+CREATE INDEX ON wf_ids(rn);
+
 -- ============================================================
 -- WORKFLOW EVENTS  (1,000,000)
 -- ============================================================
@@ -333,7 +331,7 @@ INSERT INTO workflow_events (
 )
 SELECT
   gen_random_uuid(),
-  w.id,
+  wf.id,
   p.id,
   (ARRAY[
     'prior_auth_approved',
@@ -354,18 +352,8 @@ SELECT
   ),
   NOW() - (random() * 365)::INT * INTERVAL '1 day'
         - (random() * 86400)::INT * INTERVAL '1 second'
-FROM generate_series(1, 1000000) AS s(i)
-JOIN LATERAL (
-  SELECT id
-  FROM workflows
-  OFFSET (s.i % 50)
-  LIMIT 1
-) w ON TRUE
-JOIN LATERAL (
-  SELECT id
-  FROM patients
-  OFFSET (s.i % 100000)
-  LIMIT 1
-) p ON TRUE;
+FROM generate_series(0, 999999) AS s(i)
+JOIN wf_ids wf ON wf.rn = (s.i % 50)
+JOIN pt p ON p.rn = (s.i % 100000);
 
 COMMIT;
