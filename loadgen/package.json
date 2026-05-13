@@ -1,0 +1,9 @@
+{
+  "name": "plenful-poc-loadgen",
+  "version": "1.0.0",
+  "main": "load.js",
+  "dependencies": {
+    "pg": "^8.11.5",
+    "dotenv": "^16.4.5"
+  }
+}

@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Plenful × Materialize — Live Demo</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:          #0a0a0f;
+      --bg2:         #12121a;
+      --bg3:         #1a1a26;
+      --border:      #2a2a3a;
+      --mz-accent:   #6b5bf7;
+      --mz-light:    #8b7bff;
+      --mz-dim:      rgba(107,91,247,0.15);
+      --pg-accent:   #e8623a;
+      --pg-light:    #f07d55;
+      --pg-dim:      rgba(232,98,58,0.15);
+      --text:        #e8e8f0;
+      --text-muted:  #7a7a9a;
+      --green:       #22c55e;
+      --red:         #ef4444;
+      --font:        'SF Mono', 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 13px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ─────────────────────────────────────────────── */
+    header {
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+
+    .header-title {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .header-title h1 {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+      color: var(--text);
+    }
+
+    .header-title h1 span.mz { color: var(--mz-light); }
+
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 6px var(--green);
+      transition: background 0.3s, box-shadow 0.3s;
+    }
+    .status-dot.error { background: var(--red); box-shadow: 0 0 6px var(--red); }
+
+    /* ── Incident Banner ─────────────────────────────────────── */
+    #incident-banner {
+      background: linear-gradient(90deg, #7f1d1d, #991b1b);
+      border-bottom: 2px solid var(--red);
+      color: #fecaca;
+      padding: 10px 28px;
+      display: none;
+      align-items: center;
+      gap: 12px;
+      font-size: 13px;
+      animation: flashIn 0.3s ease;
+    }
+    #incident-banner.visible { display: flex; }
+    #incident-banner .inc-icon { font-size: 18px; }
+    #incident-banner .inc-dismiss {
+      margin-left: auto;
+      background: none;
+      border: 1px solid #fecaca;
+      color: #fecaca;
+      border-radius: 4px;
+      padding: 2px 10px;
+      cursor: pointer;
+      font-family: var(--font);
+      font-size: 11px;
+    }
+    @keyframes flashIn {
+      from { opacity: 0; transform: translateY(-8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── Main Layout ─────────────────────────────────────────── */
+    .main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0;
+      overflow: hidden;
+    }
+
+    /* ── Panel ───────────────────────────────────────────────── */
+    .panel {
+      padding: 22px 24px;
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      overflow-y: auto;
+    }
+    .panel:last-child { border-right: none; }
+    .panel.pg { border-top: 3px solid var(--pg-accent); }
+    .panel.mz { border-top: 3px solid var(--mz-accent); }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .panel-title {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+    }
+    .panel.pg .panel-title { color: var(--pg-light); }
+    .panel.mz .panel-title { color: var(--mz-light); }
+
+    .panel-badge {
+      font-size: 10px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .panel.pg .panel-badge { background: var(--pg-dim); color: var(--pg-light); border: 1px solid var(--pg-accent); }
+    .panel.mz .panel-badge { background: var(--mz-dim); color: var(--mz-light); border: 1px solid var(--mz-accent); }
+
+    /* ── Latency Hero ────────────────────────────────────────── */
+    .latency-hero {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 24px;
+      display: flex;
+      align-items: flex-end;
+      gap: 12px;
+    }
+
+    .latency-value {
+      font-size: 52px;
+      font-weight: 800;
+      line-height: 1;
+      letter-spacing: -2px;
+      transition: color 0.3s;
+    }
+    .panel.pg .latency-value { color: var(--pg-light); }
+    .panel.mz .latency-value { color: var(--mz-light); }
+    .latency-value.danger { color: var(--red) !important; }
+
+    .latency-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding-bottom: 6px;
+    }
+    .latency-unit { font-size: 18px; color: var(--text-muted); font-weight: 400; }
+    .latency-rows { font-size: 11px; color: var(--text-muted); }
+
+    /* ── Chart ───────────────────────────────────────────────── */
+    .chart-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+    }
+
+    .chart-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin-bottom: 10px;
+    }
+
+    .chart-wrap {
+      height: 110px;
+      position: relative;
+    }
+
+    /* ── Stats Row ───────────────────────────────────────────── */
+    .stats-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .stat-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 14px;
+    }
+
+    .stat-label {
+      font-size: 10px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+
+    .stat-value {
+      font-size: 26px;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .panel.pg .stat-value { color: var(--pg-light); }
+    .panel.mz .stat-value { color: var(--mz-light); }
+
+    .stat-sub {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .fresh-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: rgba(34,197,94,0.1);
+      border: 1px solid rgba(34,197,94,0.4);
+      color: #4ade80;
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    /* ── Query Log ───────────────────────────────────────────── */
+    .query-log-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+      flex: 1;
+    }
+
+    .query-log-title {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin-bottom: 10px;
+    }
+
+    .query-log-entries {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .query-entry {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 8px;
+      animation: entryIn 0.2s ease;
+    }
+    @keyframes entryIn {
+      from { opacity: 0; transform: translateX(-4px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+
+    .query-text {
+      font-size: 11px;
+      color: #a0a0c0;
+      word-break: break-all;
+      line-height: 1.4;
+      flex: 1;
+    }
+    .query-text .kw { color: #7dd3fc; }
+    .query-text .tbl { color: #86efac; }
+
+    .query-time {
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .panel.pg .query-time { color: var(--pg-light); }
+    .panel.mz .query-time { color: var(--mz-light); }
+    .query-time.slow { color: var(--red); }
+
+    /* ── Controls ────────────────────────────────────────────── */
+    .controls {
+      background: var(--bg2);
+      border-top: 1px solid var(--border);
+      padding: 16px 28px;
+      display: flex;
+      align-items: center;
+      gap: 28px;
+      flex-wrap: wrap;
+      flex-shrink: 0;
+    }
+
+    .control-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .control-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      white-space: nowrap;
+    }
+
+    select, input[type="range"] {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 6px;
+      font-family: var(--font);
+      font-size: 12px;
+      padding: 6px 10px;
+      cursor: pointer;
+      outline: none;
+    }
+    select:focus, input[type="range"]:focus {
+      border-color: var(--mz-accent);
+    }
+    select option { background: var(--bg3); }
+
+    input[type="range"] {
+      padding: 0;
+      width: 120px;
+      accent-color: var(--mz-accent);
+    }
+
+    .range-value {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--mz-light);
+      min-width: 24px;
+    }
+
+    .btn-spike {
+      background: linear-gradient(135deg, #b91c1c, #dc2626);
+      border: 1px solid #ef4444;
+      color: #fff;
+      border-radius: 8px;
+      padding: 10px 22px;
+      font-family: var(--font);
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+      letter-spacing: 0.3px;
+    }
+    .btn-spike:hover { opacity: 0.9; }
+    .btn-spike:active { transform: scale(0.97); }
+    .btn-spike:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .spike-result {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .spike-result.slow { color: #fca5a5; }
+
+    /* ── Footer ──────────────────────────────────────────────── */
+    footer {
+      background: var(--bg2);
+      border-top: 1px solid var(--border);
+      padding: 8px 28px;
+      font-size: 11px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    footer span.accent { color: var(--mz-light); }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ──────────────────────────────────────────────────────────── -->
+<header>
+  <div class="header-title">
+    <h1>Plenful &times; <span class="mz">Materialize</span> — Live Demo</h1>
+  </div>
+  <div class="status-pill">
+    <div class="status-dot" id="status-dot"></div>
+    <span id="status-text">Connecting…</span>
+  </div>
+</header>
+
+<!-- ── Incident Banner ─────────────────────────────────────────────────── -->
+<div id="incident-banner">
+  <span class="inc-icon">⚠</span>
+  <span id="incident-msg">Aurora latency spike detected — queries degraded</span>
+  <button class="inc-dismiss" onclick="dismissIncident()">Dismiss</button>
+</div>
+
+<!-- ── Main ────────────────────────────────────────────────────────────── -->
+<div class="main">
+
+  <!-- Aurora Panel -->
+  <div class="panel pg">
+    <div class="panel-header">
+      <div class="panel-title">Aurora Postgres</div>
+      <div class="panel-badge">RDS Aurora</div>
+    </div>
+
+    <div class="latency-hero">
+      <div class="latency-value" id="pg-latency">—</div>
+      <div class="latency-meta">
+        <span class="latency-unit">ms</span>
+        <span class="latency-rows" id="pg-rows">— rows</span>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-label">Latency — last 60 samples</div>
+      <div class="chart-wrap">
+        <canvas id="pg-chart"></canvas>
+      </div>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-label">Buffer Cache Hit</div>
+        <div class="stat-value" id="pg-cache">—</div>
+        <div class="stat-sub" id="pg-cache-sub">pg_stat_bgwriter</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Active Connections</div>
+        <div class="stat-value" id="pg-conns">—</div>
+        <div class="stat-sub">pg_stat_activity</div>
+      </div>
+    </div>
+
+    <div class="query-log-card">
+      <div class="query-log-title">Query Log</div>
+      <div class="query-log-entries" id="pg-log"></div>
+    </div>
+  </div>
+
+  <!-- Materialize Panel -->
+  <div class="panel mz">
+    <div class="panel-header">
+      <div class="panel-title">Materialize</div>
+      <div class="panel-badge">Streaming SQL</div>
+    </div>
+
+    <div class="latency-hero">
+      <div class="latency-value" id="mz-latency">—</div>
+      <div class="latency-meta">
+        <span class="latency-unit">ms</span>
+        <span class="latency-rows" id="mz-rows">— rows</span>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-label">Latency — last 60 samples</div>
+      <div class="chart-wrap">
+        <canvas id="mz-chart"></canvas>
+      </div>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-label">Query Freshness</div>
+        <div style="margin-top:4px">
+          <span class="fresh-badge">✓ Always Fresh</span>
+        </div>
+        <div class="stat-sub" style="margin-top:6px">Incrementally maintained</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Active Connections</div>
+        <div class="stat-value" id="mz-conns">—</div>
+        <div class="stat-sub">pgwire protocol</div>
+      </div>
+    </div>
+
+    <div class="query-log-card">
+      <div class="query-log-title">Query Log</div>
+      <div class="query-log-entries" id="mz-log"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Controls ─────────────────────────────────────────────────────────── -->
+<div class="controls">
+  <div class="control-group">
+    <label class="control-label" for="view-select">View</label>
+    <select id="view-select">
+      <option value="insurance_recon">Insurance Reconciliation</option>
+      <option value="patient_360">Patient 360</option>
+      <option value="dispense_exceptions">Dispense Exceptions</option>
+      <option value="workflow_summary">Workflow Summary</option>
+      <option value="claims_pending">Claims Pending</option>
+    </select>
+  </div>
+
+  <div class="control-group">
+    <label class="control-label" for="concurrency-range">Concurrency</label>
+    <input type="range" id="concurrency-range" min="1" max="20" value="1" />
+    <span class="range-value" id="concurrency-value">1</span>
+  </div>
+
+  <button class="btn-spike" id="spike-btn" onclick="triggerSpike()">
+    ⚡ Trigger TCS Spike
+  </button>
+
+  <span class="spike-result" id="spike-result"></span>
+</div>
+
+<!-- ── Footer ───────────────────────────────────────────────────────────── -->
+<footer>
+  <span>Powered by <span class="accent">Materialize</span> · Sub-5ms always-fresh queries</span>
+  <span style="color: var(--border)">Aurora vs Materialize · Healthcare POC · 2025</span>
+</footer>
+
+<script>
+  // ── State ──────────────────────────────────────────────────────────────────
+  const MAX_SAMPLES = 60;
+  const pgData = { latencies: [], labels: [] };
+  const mzData = { latencies: [], labels: [] };
+  const pgLog = [];
+  const mzLog = [];
+  let incidentTimer = null;
+  let connected = false;
+
+  // ── Chart Setup ───────────────────────────────────────────────────────────
+  const chartDefaults = {
+    type: 'line',
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 200 },
+      plugins: { legend: { display: false }, tooltip: {
+        callbacks: { label: ctx => `${Math.round(ctx.raw)} ms` },
+        bodyFont: { family: "'SF Mono', monospace" },
+        backgroundColor: '#1a1a26',
+        borderColor: '#2a2a3a',
+        borderWidth: 1,
+      }},
+      scales: {
+        x: { display: false },
+        y: {
+          display: true,
+          beginAtZero: true,
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          ticks: {
+            color: '#7a7a9a',
+            font: { size: 10, family: "'SF Mono', monospace" },
+            callback: v => v + ' ms',
+            maxTicksLimit: 4,
+          },
+          border: { display: false },
+        },
+      },
+    },
+  };
+
+  function makeDataset(color, dimColor) {
+    return {
+      data: [],
+      borderColor: color,
+      backgroundColor: dimColor,
+      borderWidth: 2,
+      pointRadius: 0,
+      tension: 0.35,
+      fill: true,
+    };
+  }
+
+  const pgChart = new Chart(document.getElementById('pg-chart'), {
+    ...chartDefaults,
+    data: {
+      labels: [],
+      datasets: [makeDataset('#e8623a', 'rgba(232,98,58,0.08)')],
+    },
+  });
+
+  const mzChart = new Chart(document.getElementById('mz-chart'), {
+    ...chartDefaults,
+    data: {
+      labels: [],
+      datasets: [makeDataset('#8b7bff', 'rgba(107,91,247,0.08)')],
+    },
+  });
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  function pushSample(arr, val) {
+    arr.push(val);
+    if (arr.length > MAX_SAMPLES) arr.shift();
+  }
+
+  function ts() {
+    const d = new Date();
+    return `${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
+  }
+
+  function fmtMs(ms) {
+    if (ms == null || isNaN(ms)) return '—';
+    return ms.toLocaleString();
+  }
+
+  function truncateQuery(sql, maxLen = 80) {
+    const clean = sql.replace(/\s+/g, ' ').trim();
+    return clean.length > maxLen ? clean.slice(0, maxLen) + '…' : clean;
+  }
+
+  function highlightSQL(raw) {
+    const keywords = /\b(SELECT|FROM|WHERE|JOIN|LEFT|INNER|GROUP BY|ORDER BY|LIMIT|AND|OR|ON|AS|CASE|WHEN|THEN|ELSE|END|SUM|COUNT|MAX|MIN|ROUND|EXTRACT|INTERVAL|NOT|IN|NULL|DISTINCT)\b/gi;
+    const escaped = raw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return escaped
+      .replace(keywords, m => `<span class="kw">${m.toUpperCase()}</span>`)
+      .replace(/\b(claims|claim_line_items|prior_authorizations|patients|dispensing_records|workflows|workflow_events|mv_\w+)\b/gi,
+               m => `<span class="tbl">${m}</span>`);
+  }
+
+  function renderLog(containerId, entries) {
+    const el = document.getElementById(containerId);
+    el.innerHTML = entries.slice(-5).reverse().map(e => `
+      <div class="query-entry">
+        <div class="query-text">${highlightSQL(truncateQuery(e.query))}</div>
+        <div class="query-time${e.latency > 3000 ? ' slow' : ''}">${fmtMs(e.latency)} ms</div>
+      </div>
+    `).join('');
+  }
+
+  function setConnected(ok) {
+    connected = ok;
+    const dot = document.getElementById('status-dot');
+    const txt = document.getElementById('status-text');
+    dot.className = 'status-dot' + (ok ? '' : ' error');
+    txt.textContent = ok ? 'Live' : 'Connection error';
+  }
+
+  function showIncident(msg) {
+    const banner = document.getElementById('incident-banner');
+    document.getElementById('incident-msg').textContent = msg;
+    banner.classList.add('visible');
+    if (incidentTimer) clearTimeout(incidentTimer);
+    incidentTimer = setTimeout(dismissIncident, 10000);
+  }
+
+  function dismissIncident() {
+    document.getElementById('incident-banner').classList.remove('visible');
+    if (incidentTimer) clearTimeout(incidentTimer);
+    incidentTimer = null;
+  }
+
+  // ── Poll Queries ───────────────────────────────────────────────────────────
+  async function pollQueries() {
+    const view = document.getElementById('view-select').value;
+
+    const [pgRes, mzRes] = await Promise.allSettled([
+      fetch(`/query/postgres?view=${view}`).then(r => r.json()),
+      fetch(`/query/materialize?view=${view}`).then(r => r.json()),
+    ]);
+
+    let anyOk = false;
+
+    // Aurora
+    if (pgRes.status === 'fulfilled' && !pgRes.value.error) {
+      const d = pgRes.value;
+      anyOk = true;
+
+      const latEl = document.getElementById('pg-latency');
+      latEl.textContent = fmtMs(d.latency_ms);
+      latEl.className = 'latency-value' + (d.latency_ms > 3000 ? ' danger' : '');
+
+      document.getElementById('pg-rows').textContent = `${(d.row_count || 0).toLocaleString()} rows`;
+
+      pushSample(pgData.latencies, d.latency_ms);
+      pushSample(pgData.labels, ts());
+      pgChart.data.labels = [...pgData.labels];
+      pgChart.data.datasets[0].data = [...pgData.latencies];
+      pgChart.update('none');
+
+      pgLog.push({ query: d.query, latency: d.latency_ms });
+      renderLog('pg-log', pgLog);
+
+      if (d.latency_ms > 3000) {
+        showIncident(`Aurora latency spiked to ${fmtMs(d.latency_ms)} ms — queries degraded for end users`);
+      }
+    }
+
+    // Materialize
+    if (mzRes.status === 'fulfilled' && !mzRes.value.error) {
+      const d = mzRes.value;
+      anyOk = true;
+
+      document.getElementById('mz-latency').textContent = fmtMs(d.latency_ms);
+      document.getElementById('mz-rows').textContent = `${(d.row_count || 0).toLocaleString()} rows`;
+
+      pushSample(mzData.latencies, d.latency_ms);
+      pushSample(mzData.labels, ts());
+      mzChart.data.labels = [...mzData.labels];
+      mzChart.data.datasets[0].data = [...mzData.latencies];
+      mzChart.update('none');
+
+      mzLog.push({ query: d.query, latency: d.latency_ms });
+      renderLog('mz-log', mzLog);
+    }
+
+    setConnected(anyOk);
+  }
+
+  // ── Poll Metrics ───────────────────────────────────────────────────────────
+  async function pollMetrics() {
+    try {
+      const res = await fetch('/metrics');
+      if (!res.ok) return;
+      const d = await res.json();
+
+      const cacheEl = document.getElementById('pg-cache');
+      const pct = Math.round(d.cache_hit_pct ?? d.buffer_hit_rate ?? 0);
+      cacheEl.textContent = `${pct}%`;
+      cacheEl.style.color = pct < 50 ? 'var(--red)' : pct < 80 ? 'var(--pg-light)' : 'var(--green)';
+
+      document.getElementById('pg-cache-sub').textContent =
+        `${(d.temp_files || 0).toLocaleString()} temp files`;
+
+      document.getElementById('pg-conns').textContent = d.active_connections ?? '—';
+    } catch (_) {}
+  }
+
+  // ── Poll Load Gen Status ───────────────────────────────────────────────────
+  async function pollLoadGen() {
+    try {
+      const res = await fetch('/loadgen/status');
+      if (!res.ok) return;
+      const d = await res.json();
+      document.getElementById('mz-conns').textContent = d.workers ?? '—';
+    } catch (_) {}
+  }
+
+  // ── Concurrency Slider ─────────────────────────────────────────────────────
+  const slider = document.getElementById('concurrency-range');
+  const sliderVal = document.getElementById('concurrency-value');
+
+  slider.addEventListener('input', () => {
+    const val = parseInt(slider.value, 10);
+    sliderVal.textContent = val;
+  });
+
+  slider.addEventListener('change', async () => {
+    const workers = parseInt(slider.value, 10);
+    sliderVal.textContent = workers;
+    try {
+      await fetch('/loadgen/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workers, mode: workers > 1 ? 'load' : 'idle' }),
+      });
+    } catch (_) {}
+  });
+
+  // ── Spike Button ───────────────────────────────────────────────────────────
+  async function triggerSpike() {
+    const btn = document.getElementById('spike-btn');
+    const res = document.getElementById('spike-result');
+
+    btn.disabled = true;
+    btn.textContent = '⏳ Running spike…';
+    res.textContent = '';
+    res.className = 'spike-result';
+
+    try {
+      const resp = await fetch('/spike', { method: 'POST' });
+      const d = await resp.json();
+
+      if (d.error) {
+        res.textContent = `Error: ${d.error}`;
+        res.className = 'spike-result slow';
+      } else {
+        const ms = d.latency_ms;
+        res.textContent = `Spike completed: ${fmtMs(ms)} ms`;
+        res.className = 'spike-result' + (ms > 3000 ? ' slow' : '');
+        if (ms > 3000) {
+          showIncident(`TCS spike caused ${fmtMs(ms)} ms Aurora query — Materialize unaffected`);
+        }
+      }
+    } catch (err) {
+      res.textContent = `Network error: ${err.message}`;
+      res.className = 'spike-result slow';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '⚡ Trigger TCS Spike';
+    }
+  }
+
+  // ── View Select ────────────────────────────────────────────────────────────
+  document.getElementById('view-select').addEventListener('change', () => {
+    // Reset logs on view change
+    pgLog.length = 0;
+    mzLog.length = 0;
+    pgData.latencies.length = 0;
+    pgData.labels.length = 0;
+    mzData.latencies.length = 0;
+    mzData.labels.length = 0;
+    pgChart.data.labels = [];
+    pgChart.data.datasets[0].data = [];
+    pgChart.update('none');
+    mzChart.data.labels = [];
+    mzChart.data.datasets[0].data = [];
+    mzChart.update('none');
+    document.getElementById('pg-log').innerHTML = '';
+    document.getElementById('mz-log').innerHTML = '';
+    // Immediately poll
+    pollQueries();
+  });
+
+  // ── Kick off polling ───────────────────────────────────────────────────────
+  pollQueries();
+  pollMetrics();
+  pollLoadGen();
+
+  setInterval(pollQueries, 800);
+  setInterval(pollMetrics, 2000);
+  setInterval(pollLoadGen, 3000);
+</script>
+</body>
+</html>
