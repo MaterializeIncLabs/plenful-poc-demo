@@ -8,9 +8,10 @@ provider "aws" {
 
 provider "materialize" {
   host     = var.materialize_host
-  user     = var.materialize_user
+  username = var.materialize_user
   password = var.materialize_password
   database = var.materialize_database
+  port     = 6875
 }
 
 module "networking" {

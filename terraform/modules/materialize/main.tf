@@ -1,3 +1,12 @@
+terraform {
+  required_providers {
+    materialize = {
+      source  = "MaterializeInc/materialize"
+      version = "~> 0.8"
+    }
+  }
+}
+
 variable "rds_host" {}
 variable "rds_port" {}
 variable "rds_dbname" {}
@@ -5,8 +14,8 @@ variable "rds_username" {}
 variable "rds_password" { sensitive = true }
 
 resource "materialize_cluster" "demo" {
-  name         = "plenful-demo"
-  size         = "25cc"
+  name               = "plenful-demo"
+  size               = "25cc"
   replication_factor = 1
 }
 
@@ -16,30 +25,31 @@ resource "materialize_secret" "pg_password" {
 }
 
 resource "materialize_connection_postgres" "aurora" {
-  name    = "aurora_conn"
-  host    = var.rds_host
-  port    = var.rds_port
+  name     = "aurora_conn"
+  host     = var.rds_host
+  port     = var.rds_port
+  database = var.rds_dbname
+  ssl_mode = "require"
+
   user {
     text = var.rds_username
   }
+
   password {
     name          = materialize_secret.pg_password.name
     schema_name   = "public"
     database_name = "materialize"
   }
-  database = var.rds_dbname
-  ssl_mode = "require"
 }
 
 resource "materialize_source_postgres" "main" {
-  name        = "pg_source"
+  name         = "pg_source"
   cluster_name = materialize_cluster.demo.name
+  publication  = "mz_source"
 
-  connection {
+  postgres_connection {
     name = materialize_connection_postgres.aurora.name
   }
-
-  publication = "mz_source"
 
   table {
     upstream_name        = "organizations"
