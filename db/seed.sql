@@ -101,8 +101,8 @@ SELECT
   END  AS status,
   round((50 + random() * 4950)::NUMERIC, 2)  AS billed_amount,
   CASE
-    WHEN s.i % 100 < 60 THEN round((50 + random() * 4950)::NUMERIC * (0.7 + random() * 0.25), 2)
-    WHEN s.i % 100 < 90 THEN round((50 + random() * 4950)::NUMERIC * (0.3 + random() * 0.4),  2)
+    WHEN s.i % 100 < 60 THEN round(((50 + random() * 4950) * (0.7 + random() * 0.25))::NUMERIC, 2)
+    WHEN s.i % 100 < 90 THEN round(((50 + random() * 4950) * (0.3 + random() * 0.4))::NUMERIC,  2)
     ELSE                      NULL
   END  AS paid_amount,
   (CURRENT_DATE - (random() * 365 * 2)::INT)  AS service_date,
@@ -126,9 +126,9 @@ SELECT
   c.id,
   (ARRAY['99213','99214','99215','99203','99204','93000','71046','80053','36415','90658'])
     [ 1 + (row_number() OVER () % 10) ],
-  round((c.billed_amount * (0.3 + random() * 0.4))::NUMERIC, 2),
+  round((c.billed_amount * (0.3 + random() * 0.4)::NUMERIC), 2),
   CASE WHEN c.paid_amount IS NOT NULL
-       THEN round((c.paid_amount * (0.3 + random() * 0.4))::NUMERIC, 2)
+       THEN round((c.paid_amount * (0.3 + random() * 0.4)::NUMERIC), 2)
        ELSE NULL END,
   c.status,
   c.created_at
@@ -145,9 +145,9 @@ SELECT
   c.id,
   (ARRAY['99213','99214','99215','99203','99204','93000','71046','80053','36415','90658'])
     [ 1 + ((row_number() OVER () + 3) % 10) ],
-  round((c.billed_amount * (0.2 + random() * 0.3))::NUMERIC, 2),
+  round((c.billed_amount * (0.2 + random() * 0.3)::NUMERIC), 2),
   CASE WHEN c.paid_amount IS NOT NULL
-       THEN round((c.paid_amount * (0.2 + random() * 0.3))::NUMERIC, 2)
+       THEN round((c.paid_amount * (0.2 + random() * 0.3)::NUMERIC), 2)
        ELSE NULL END,
   c.status,
   c.created_at
@@ -165,9 +165,9 @@ SELECT
   c.id,
   (ARRAY['99213','99214','99215','99203','99204','93000','71046','80053','36415','90658'])
     [ 1 + ((row_number() OVER () + 7) % 10) ],
-  round((c.billed_amount * (0.1 + random() * 0.2))::NUMERIC, 2),
+  round((c.billed_amount * (0.1 + random() * 0.2)::NUMERIC), 2),
   CASE WHEN c.paid_amount IS NOT NULL
-       THEN round((c.paid_amount * (0.1 + random() * 0.2))::NUMERIC, 2)
+       THEN round((c.paid_amount * (0.1 + random() * 0.2)::NUMERIC), 2)
        ELSE NULL END,
   c.status,
   c.created_at
