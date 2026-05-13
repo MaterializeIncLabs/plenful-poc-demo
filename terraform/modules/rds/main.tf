@@ -14,29 +14,14 @@ resource "aws_db_subnet_group" "main" {
 resource "aws_rds_cluster_parameter_group" "main" {
   name        = "plenful-poc-aurora-pg16"
   family      = "aurora-postgresql16"
-  description = "Plenful POC — logical replication enabled"
+  description = "Plenful POC - logical replication enabled"
 
+  # rds.logical_replication=1 is the only required cluster-level parameter.
+  # It automatically sets wal_level=logical. max_replication_slots and
+  # max_wal_senders are instance-level and default to values sufficient for CDC.
   parameter {
     name         = "rds.logical_replication"
     value        = "1"
-    apply_method = "pending-reboot"
-  }
-
-  parameter {
-    name         = "wal_level"
-    value        = "logical"
-    apply_method = "pending-reboot"
-  }
-
-  parameter {
-    name         = "max_replication_slots"
-    value        = "10"
-    apply_method = "pending-reboot"
-  }
-
-  parameter {
-    name         = "max_wal_senders"
-    value        = "10"
     apply_method = "pending-reboot"
   }
 
@@ -46,7 +31,7 @@ resource "aws_rds_cluster_parameter_group" "main" {
 resource "aws_rds_cluster" "main" {
   cluster_identifier      = "plenful-poc-aurora"
   engine                  = "aurora-postgresql"
-  engine_version          = "16.2"
+  engine_version          = "16.6"
   database_name           = "plenful"
   master_username         = var.db_username
   master_password         = var.db_password
